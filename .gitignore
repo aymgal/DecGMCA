@@ -1,0 +1,16 @@
+*.pyc
+.pytest_cache/
+.DS_store
+**/.DS_Store
+
+# C extensions
+*.so
+*.o
+
+# Packages
+*.egg
+*.egg-info
+dist
+build
+eggs
+develop-eggs
