@@ -260,7 +260,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
         if len(index) > 0:
             reinitialize_sources(V,Shat,A,index)
         else:
-            if FTPlane:
+            if FTPlane or (not FTPlane and deconv):
                 Shat = fftNd1d(S,Ndim)              # Transform in Fourier space
             else:
                 S = np.reshape(S,(n,P))
@@ -278,10 +278,12 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
             else:
                 Shat = np.reshape(Shat,(n,P))
                 A = update_A(V,Shat,M=M,mask=mask,deconv=deconv)
-        else:
+        elif not FTPlane and deconv:
             # use Fourier transforms of S, V and M
             Shat = np.reshape(Shat,(n,P))
             A = update_A(Vhat,Shat,M=Mhat,mask=mask,deconv=deconv)
+        else:
+            A = update_A(V,S,M=M,mask=mask,deconv=deconv)
         A[np.isnan(A)]=0
         A = np.real(A)
         if positivityA:
@@ -302,11 +304,15 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
     ####################### Ameliorate the estimation of the sources ##########################
     if postProc == 1:
         print 'Post processing to ameliorate the estimate S:'
-        if FTPlane:
-            S,thIter=update_S_prox_Condat_Vu(V,A,S,M,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane,positivity=positivityS)
+        if not FTPlane and deconv:
+            FTPlane_update = True
+            S,thIter=update_S_prox_Condat_Vu(Vhat,A,S,Mhat,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane_update,positivity=positivityS)
         else:
-            S,thIter=update_S_prox_Condat_Vu(Vhat,A,S,Mhat,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=True,positivity=positivityS)
+            S,thIter=update_S_prox_Condat_Vu(V,A,S,M,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane,positivity=positivityS)
     elif postProc == 2:
+        if not FTPlane and deconv:
+            raise NotImplementedError("PostProc mode 2 with deconvolution and direct space input is not supported")
+
         print 'Post processing to ameliorate the estimate S and estimate A:'
         inImax1 = 50
         inImax2 = 1
@@ -327,6 +333,8 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
                     Shat_Hi = np.reshape(Shat_Hi,(n,P))
                 else:
                     Shat = np.reshape(Shat,(n,P))
+            elif not FTPlane and deconv:
+                Shat = fftNd1d(S,Ndim)
             else:
                 S = np.reshape(S,(n,P))
             
@@ -338,6 +346,9 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
                     A = update_A_prox(V,A,Shat,M,inImax2,mu2,mask=mask,positivity=positivityA)
             else:
                 A = update_A(V,A,S,M,inImax2,mu2,mask=mask,positivity=positivityA)
+
+            if (i+1) % verbosity == 0:
+                print "Iteration (post-proc A/S) : "+str(i+1)
         
         S = np.real(np.reshape(S,(n,Nx,Ny)).squeeze())
     
