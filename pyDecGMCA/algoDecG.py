@@ -24,7 +24,7 @@ import glob
 import re
 
 
-def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wname='starlet',thresStrtg=2,FTPlane=True,fc=1./16,logistic=False,postProc=0,postProcImax=50,Kend=3.0,Ksig=3.0,positivityS=False,positivityA=False):
+def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wname='starlet',thresStrtg=2,FTPlane=True,fc=1./16,logistic=False,postProc=0,postProcImax=50,Kend=3.0,Ksig=3.0,positivityS=False,positivityA=False, verbosity=-1):
     '''
         Deconvolution GMCA algorithm to solve simultaneously deconvolution and Blind Source Separation (BSS)
         
@@ -66,6 +66,11 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
         '''
     
     (Bd,P) = np.shape(V)
+    if not FTPlane:
+        # compute Fourier transforms of V and M
+        Vhat = fftNd1d(V.reshape((Bd, Nx, Ny)), Ndim).reshape((Bd, P))
+        Mhat = fftNd1d(M.reshape((Bd, Nx, Ny)), Ndim).reshape((Bd, P))
+
     #################### Matrix completion for initilize A ###########################
     if Ndim == 1 and FTPlane:
         V_Hi = filter_Hi(V,Ndim,fc)
@@ -135,18 +140,22 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
         else:
             epsilon_iter = epsilon
         
-        Shat = update_S(V,A,M,mask=mask,deconv=deconv,epsilon=epsilon_iter)
-        Shat[np.isnan(Shat)]=0+0j
-        #             Shat = update_S(Xe,A,M,mask=mask,epsilon=epsilon_iter)
-        #         Shat = np.dot(LA.inv(np.dot(A.T,A)),np.dot(A.T,V))
         if FTPlane:
-            S = np.real(ifftNd1d(np.reshape(Shat,(n,Nx,Ny)).squeeze(),Ndim))                    # In direct plane
-            if positivityS:
-                S[S<0] = 0
+            Shat = update_S(V,A,M=M,mask=mask,deconv=deconv,epsilon=epsilon_iter)
+            #             Shat = update_S(Xe,A,M,mask=mask,epsilon=epsilon_iter)
+            #         Shat = np.dot(LA.inv(np.dot(A.T,A)),np.dot(A.T,V))
         else:
-            S = np.real(np.reshape(Shat,(n,Nx,Ny)).squeeze())
-            if positivityS:
-                S[S<0] = 0
+            # use Fourier transforms of V and M here
+            Shat = update_S(Vhat,A,M=Mhat,mask=mask,deconv=deconv,epsilon=epsilon_iter)
+
+        Shat[np.isnan(Shat)]=0+0j
+
+        if FTPlane or (not FTPlane and deconv):
+            S = ifftNd1d(np.reshape(Shat,(n,Nx,Ny)), Ndim)  # In direct plane
+
+        S = np.real(S).squeeze()
+        if positivityS:
+            S[S<0] = 0
         
         ############################## For wavelet representation ##########################
         if wavelet:
@@ -265,31 +274,38 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
                     Shat_Hi[:,int(-fc_pass*P):int(-fc*P)] = Shat_Hi[:,int(-fc_pass*P):int(-fc*P)]*flogist2
                 Shat_Hi = np.reshape(Shat_Hi,(n,P))
                 ####################################### Update A ######################################
-                A = update_A(V_Hi,Shat_Hi,M,mask=mask,deconv=deconv)
+                A = update_A(V_Hi,Shat_Hi,M=M,mask=mask,deconv=deconv)
             else:
                 Shat = np.reshape(Shat,(n,P))
-                A = update_A(V,Shat,M,mask=mask,deconv=deconv)
+                A = update_A(V,Shat,M=M,mask=mask,deconv=deconv)
         else:
-            A = update_A(V,S,M,mask=mask,deconv=deconv)
+            # use Fourier transforms of S, V and M
+            Shat = np.reshape(Shat,(n,P))
+            A = update_A(Vhat,Shat,M=Mhat,mask=mask,deconv=deconv)
         A[np.isnan(A)]=0
         A = np.real(A)
         if positivityA:
             A[A<0] = 0
         normalize(A)
         
-        
-        print "Iteration: "+str(i+1)
-        print "Condition number of A:"
-        print LA.cond(A), 'A'
-        print "Condition number of S:"
-        print LA.cond(np.reshape(S,(n,P))), 'S'
+        if verbosity < 0:
+            print "Iteration: "+str(i+1)
+            print "Condition number of A:"
+            print LA.cond(A), 'A'
+            print "Condition number of S:"
+            print LA.cond(np.reshape(S,(n,P))), 'S'
+        elif (i+1) % verbosity == 0:
+            print "Iteration: "+str(i+1)
     
     if Ndim == 2:
         S = np.reshape(S,(n,Nx,Ny))
     ####################### Ameliorate the estimation of the sources ##########################
     if postProc == 1:
         print 'Post processing to ameliorate the estimate S:'
-        S,thIter=update_S_prox_Condat_Vu(V,A,S,M,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane,positivity=positivityS)
+        if FTPlane:
+            S,thIter=update_S_prox_Condat_Vu(V,A,S,M,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane,positivity=positivityS)
+        else:
+            S,thIter=update_S_prox_Condat_Vu(Vhat,A,S,Mhat,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=True,positivity=positivityS)
     elif postProc == 2:
         print 'Post processing to ameliorate the estimate S and estimate A:'
         inImax1 = 50

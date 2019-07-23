@@ -18,6 +18,9 @@ import re
 import astropy.io.fits as fits
 import pyWavelet.waveTools as pm
 import sys
+# from scipy.signal import fftconvolve
+from mathTools import fftNd1d, ifftNd1d
+
 
 def update_S(V,A,M=1,mask=True,deconv=False,epsilon=0.):
     '''
@@ -49,13 +52,16 @@ def update_S(V,A,M=1,mask=True,deconv=False,epsilon=0.):
             rho = LA.norm(denom,2)
             denom = LA.inv(denom+epsilon*max(rho,1e-4)*np.eye(N))
             S[:,k] = np.dot(denom,numr)
-    elif deconv:
+    elif deconv:  # TODO : implement convolution for direct space image
+                  # below is only a component wise product
+
         for k in np.arange(P):
             numr = np.dot(A.conj().transpose(),M[:,k]*V[:,k])
             denom = np.dot((M[:,k][:,np.newaxis]*A).conj().transpose(),M[:,k][:,np.newaxis]*A)
             rho = LA.norm(denom,2)
             denom = LA.inv(denom+epsilon*max(rho,1e-4)*np.eye(N))
             S[:,k] = np.dot(denom,numr)
+            
     else:
         denom = np.dot(A.conj().transpose(),A)
         if LA.cond(denom) < 1/sys.float_info.epsilon:
@@ -108,7 +114,6 @@ def update_A(V,S,M=1,mask=True,deconv=False):
                 rho = LA.norm(denom,2)
                 denom = LA.inv(denom+max(1e-4*rho,1e-4)*np.eye(N))
             A[nu,:] = np.dot(numr,denom)
-    
     else:
         numr = np.dot(V,S.conj().transpose())
         denom = np.dot(S,S.conj().transpose())

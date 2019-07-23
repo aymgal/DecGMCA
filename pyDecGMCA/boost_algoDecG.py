@@ -24,7 +24,7 @@ import os
 import glob
 import re
 
-def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wname='starlet',thresStrtg=2,FTPlane=True,fc=1./16,logistic=False,postProc=0,postProcImax=50,Kend=3.0,Ksig=3.0,positivityS=False,positivityA=False):
+def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wname='starlet',thresStrtg=2,FTPlane=True,fc=1./16,logistic=False,postProc=0,postProcImax=50,Kend=3.0,Ksig=3.0,positivityS=False,positivityA=False, verbosity=-1):
     '''
     Deconvolution GMCA algorithm to solve simultaneously deconvolution and Blind Source Separation (BSS)
     
@@ -288,12 +288,14 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
             A[A<0] = 0
         normalize(A)
         
-        
-        print "Iteration: "+str(i+1)
-        print "Condition number of A:"
-        print LA.cond(A), 'A'
-        print "Condition number of S:"
-        print LA.cond(np.reshape(S,(n,P))), 'S'    
+        if verbosity < 0:
+            print "Iteration: "+str(i+1)
+            print "Condition number of A:"
+            print LA.cond(A), 'A'
+            print "Condition number of S:"
+            print LA.cond(np.reshape(S,(n,P))), 'S'
+        elif (i+1) % verbosity == 0:
+            print "Iteration: "+str(i+1)
     
     if Ndim == 2:
         S = np.reshape(S,(n,Nx,Ny))
