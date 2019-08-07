@@ -424,7 +424,6 @@ def MakeSources(n_s=2,t_samp=1024,K=8,w=5,export=True):
     import numpy as np
     import os
     import glob
-    import pyfits as fits
     import re
 
     print "Process of creating sources ......"

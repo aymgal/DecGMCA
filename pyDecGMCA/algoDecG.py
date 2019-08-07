@@ -66,10 +66,13 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
         '''
     
     (Bd,P) = np.shape(V)
-    if not FTPlane:
+
+    # specific mode for using DecGMCA with direct space input and deconvolution only
+    DPlane_deconv = (not FTPlane) and (not mask) and deconv
+    if DPlane_deconv:
         # compute Fourier transforms of V and M
         Vhat = fftNd1d(V.reshape((Bd, Nx, Ny)), Ndim).reshape((Bd, P))
-        Mhat = fftNd1d(M.reshape((Bd, Nx, Ny)), Ndim).reshape((Bd, P))
+        Mhat = fftshiftNd1d(M.reshape((Bd, Nx, Ny)), Ndim).reshape((Bd, P))
 
     #################### Matrix completion for initilize A ###########################
     if Ndim == 1 and FTPlane:
@@ -106,7 +109,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
     #     A = np.abs(v[:,0:n])
     
     #     A = np.copy(Ar)
-    normalize(A)
+    normalize(A)  # TODO is this kind of normalization we want ??
     
     ############################ Save information of wavelet (Starlet and DCT only), ################################
     if wavelet:
@@ -140,7 +143,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
         else:
             epsilon_iter = epsilon
         
-        if FTPlane:
+        if not DPlane_deconv:
             Shat = update_S(V,A,M=M,mask=mask,deconv=deconv,epsilon=epsilon_iter)
             #             Shat = update_S(Xe,A,M,mask=mask,epsilon=epsilon_iter)
             #         Shat = np.dot(LA.inv(np.dot(A.T,A)),np.dot(A.T,V))
@@ -150,7 +153,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
 
         Shat[np.isnan(Shat)]=0+0j
 
-        if FTPlane or (not FTPlane and deconv):
+        if FTPlane or DPlane_deconv:
             S = ifftNd1d(np.reshape(Shat,(n,Nx,Ny)), Ndim)  # In direct plane
 
         S = np.real(S).squeeze()
@@ -256,11 +259,15 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
             #         print thTab
             hardTh(S,thTab,weights=None,reweighted=False)
         
+        # Shat = fftNd1d(S,Ndim)
         index = check_zero_sources(A,Shat.reshape((n,P)))
         if len(index) > 0:
-            reinitialize_sources(V,Shat,A,index)
+            if DPlane_deconv:
+                reinitialize_sources(Vhat,Shat,A,index)
+            else:
+                reinitialize_sources(V,Shat,A,index)
         else:
-            if FTPlane or (not FTPlane and deconv):
+            if FTPlane or DPlane_deconv:
                 Shat = fftNd1d(S,Ndim)              # Transform in Fourier space
             else:
                 S = np.reshape(S,(n,P))
@@ -278,7 +285,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
             else:
                 Shat = np.reshape(Shat,(n,P))
                 A = update_A(V,Shat,M=M,mask=mask,deconv=deconv)
-        elif not FTPlane and deconv:
+        elif DPlane_deconv:
             # use Fourier transforms of S, V and M
             Shat = np.reshape(Shat,(n,P))
             A = update_A(Vhat,Shat,M=Mhat,mask=mask,deconv=deconv)
@@ -286,31 +293,31 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
             A = update_A(V,S,M=M,mask=mask,deconv=deconv)
         A[np.isnan(A)]=0
         A = np.real(A)
+        # print(A)
         if positivityA:
             A[A<0] = 0
+        # print(A)
         normalize(A)
         
-        if verbosity < 0:
+        if verbosity < 0 or (verbosity > 0 and (i+1) % verbosity == 0):
             print "Iteration: "+str(i+1)
             print "Condition number of A:"
             print LA.cond(A), 'A'
             print "Condition number of S:"
             print LA.cond(np.reshape(S,(n,P))), 'S'
-        elif (i+1) % verbosity == 0:
-            print "Iteration: "+str(i+1)
     
     if Ndim == 2:
         S = np.reshape(S,(n,Nx,Ny))
     ####################### Ameliorate the estimation of the sources ##########################
     if postProc == 1:
         print 'Post processing to ameliorate the estimate S:'
-        if not FTPlane and deconv:
+        if DPlane_deconv:
             FTPlane_update = True
             S,thIter=update_S_prox_Condat_Vu(Vhat,A,S,Mhat,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane_update,positivity=positivityS)
         else:
             S,thIter=update_S_prox_Condat_Vu(V,A,S,M,Nx,Ny,Ndim,Imax=postProcImax,tau=0.0,eta=0.5,Ksig=Ksig,wavelet=wavelet,scale=scale,wname=wname,thresStrtg=thresStrtg,FTPlane=FTPlane,positivity=positivityS)
     elif postProc == 2:
-        if not FTPlane and deconv:
+        if DPlane_deconv:
             raise NotImplementedError("PostProc mode 2 with deconvolution and direct space input is not supported")
 
         print 'Post processing to ameliorate the estimate S and estimate A:'
@@ -333,7 +340,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
                     Shat_Hi = np.reshape(Shat_Hi,(n,P))
                 else:
                     Shat = np.reshape(Shat,(n,P))
-            elif not FTPlane and deconv:
+            elif DPlane_deconv:
                 Shat = fftNd1d(S,Ndim)
             else:
                 S = np.reshape(S,(n,P))
@@ -347,7 +354,7 @@ def DecGMCA(V,M,n,Nx,Ny,Imax,epsilon,epsilonF,Ndim,wavelet,scale,mask,deconv,wna
             else:
                 A = update_A(V,A,S,M,inImax2,mu2,mask=mask,positivity=positivityA)
 
-            if (i+1) % verbosity == 0:
+            if verbosity < 0 or (verbosity > 0 and (i+1) % verbosity == 0):
                 print "Iteration (post-proc A/S) : "+str(i+1)
         
         S = np.real(np.reshape(S,(n,Nx,Ny)).squeeze())

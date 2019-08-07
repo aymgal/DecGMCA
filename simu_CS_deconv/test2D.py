@@ -35,7 +35,7 @@ Ndim = 2               # Dimension of the signal
 ########## Algorithm parameters ##################
 ##################################################
 FTPlane = True
-mask = True
+mask = False
 deconv = True
 Imax = 500
 kern_param = 100.
@@ -125,6 +125,8 @@ if deconv:
     if not os.path.exists(drKernels+drReal):
         os.makedirs(drKernels+drReal)
     fits.writeto(drKernels+drReal+'kern_bd'+str(bd)+'.fits',kern,clobber=True)
+
+    kern_backup = kern
     
     kern = np.real(ifftshiftNd1d(kern,Ndim))             # Shift ft to make sure low frequency in the corner
     kernMat = np.reshape(kern,(bd,Nx*Ny))
@@ -151,18 +153,47 @@ else:
 #                         os.makedirs(drNoise+drReal)
 #                     fits.writeto(drNoise+drReal+'noise_bd'+str(b)+'.fits',N,clobber=True)
 
-N = fits.getdata(drNoise+'noise.fits')
+# N = fits.getdata(drNoise+'noise.fits')
+N = np.zeros_like(S)
 #                     N = np.delete(N,1,axis=0)
 #                     N = N[1:]
 
 S_N = S+N
 if FTPlane:
     S_Nhat = fftNd1d(S_N,Ndim)                   # Ft of sources
+    S_Nhatshift = ifftshiftNd1d(S_N,Ndim)
 else:
     S_Nhat = S_N
 S_NhatMat = np.reshape(S_Nhat,(n,Nx*Ny))        # Transform to 2D matrix form
 H = kernMat*MMat
 V_N = np.dot(A,S_NhatMat)*H
+
+
+plt.figure()
+plt.imshow(kern_backup[10, :, :], origin='lower')
+plt.figure()
+plt.imshow(kern[10, :, :], origin='lower')
+
+plt.figure()
+diff = np.real(fftshiftNd1d(S_N,Ndim)) - np.real(ifftshiftNd1d(S_N,Ndim))
+plt.imshow(diff[0, :], origin='lower')
+
+plt.figure()
+plt.imshow(S[0, :, :], origin='lower')
+
+plt.figure()
+plt.imshow(np.real(S_Nhat[0, :].reshape(Nx,Ny)), origin='lower')
+
+plt.figure()
+plt.imshow(np.real(S_Nhatshift[0, :].reshape(Nx,Ny)), origin='lower')
+
+plt.figure()
+plt.imshow(np.real(V_N[10, :].reshape(Nx,Ny)), origin='lower')
+
+plt.show()
+
+sys.exit()
+
 #     V_N = (V + N)*MMat
 
 #                     (S_est,A_est) = GMCA_class(V_N,kernMat,n,Nx,Ny,Imax,tauF,epsilon[j],Ndim,wavelet=True,scale=4,mask=mask,wname='starlet',coarseScaleStrtg=1,thresStrtg=2,FTPlane=FTPlane,fc=fc,Ar=A)
