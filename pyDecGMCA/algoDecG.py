@@ -26,8 +26,7 @@ import re
 
 def DecGMCA(V, M, n, Nx, Ny, Imax, epsilon, epsilonF, Ndim, wavelet, scale, mask, deconv, wname='starlet', thresStrtg=2,
             FTPlane=True, fc=1. / 16, logistic=False, postProc=0, postProcImax=50, Kend=3.0, Ksig=3.0,
-            positivityS=False,
-            positivityA=False):
+            positivityS=False, positivityA=False, mixing_normalization=None, print_iterations=1):
     """
     Deconvolution GMCA algorithm to solve simultaneously deconvolution and Blind Source Separation (BSS)
 
@@ -123,7 +122,10 @@ def DecGMCA(V, M, n, Nx, Ny, Imax, epsilon, epsilonF, Ndim, wavelet, scale, mask
     # A = np.abs(v[:, 0:n])
     #
     # A = np.copy(Ar)
-    normalize(A)
+    if mixing_normalization is not None:
+        mixing_normalization(A)
+    else:
+        normalize(A)
 
     # Save information of wavelet (Starlet and DCT only)
     if wavelet:
@@ -299,13 +301,17 @@ def DecGMCA(V, M, n, Nx, Ny, Imax, epsilon, epsilonF, Ndim, wavelet, scale, mask
         A = np.real(A)
         if positivityA:
             A[A < 0] = 0
-        normalize(A)
+        if mixing_normalization is not None:
+            mixing_normalization(A)
+        else:
+            normalize(A)
 
-        print("Iteration: " + str(i + 1))
-        print("Condition number of A:")
-        print(LA.cond(A), 'A')
-        print("Condition number of S:")
-        print(LA.cond(np.reshape(S, (n, P))), 'S')
+        if (i + 1) % print_iterations == 0:
+            print("Iteration: " + str(i + 1))
+            print("Condition number of A:")
+            print(LA.cond(A), 'A')
+            print("Condition number of S:")
+            print(LA.cond(np.reshape(S, (n, P))), 'S')
 
     if Ndim == 2:
         S = np.reshape(S, (n, Nx, Ny))
@@ -350,6 +356,11 @@ def DecGMCA(V, M, n, Nx, Ny, Imax, epsilon, epsilonF, Ndim, wavelet, scale, mask
                     A = update_A_prox(V, A, Shat, M, inImax2, mu2, mask=mask, positivity=positivityA)
             else:
                 A = update_A(V, A, S, M, inImax2, mu2, mask=mask, positivity=positivityA)
+
+            if mixing_normalization is not None:
+                mixing_normalization(A)
+            else:
+                normalize(A)
 
         S = np.real(np.reshape(S, (n, Nx, Ny)).squeeze())
 
