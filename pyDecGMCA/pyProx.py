@@ -465,7 +465,7 @@ def update_S_prox_Condat_Vu(V, A, S, H, Nx, Ny, Ndim, Imax, tau, eta, Ksig, wave
                 for sr in np.arange(N):
                     wtTmp = star2d(S[sr], scale=scale, fast=True, gen2=gen2, normalization=True)
                     wt[sr] = np.copy(wtTmp[:-1])
-            wt = np.reshape(wt, (N, np.size(wt) / N))
+            wt = np.reshape(wt, (N, int(np.size(wt) / N)))
             sig = mad(wt[:, :P])
             u = np.zeros((N, (scale - 1) * P))
             for sr in np.arange(N):
@@ -544,7 +544,7 @@ def update_S_prox_Condat_Vu(V, A, S, H, Nx, Ny, Ndim, Imax, tau, eta, Ksig, wave
                 # sig = np.array([0.01, 0.01])
             elif thresStrtg == 2:
                 sig = np.zeros((N, scale - 1))
-                wt = np.reshape(termQ2, (N, scale - 1, np.size(termQ2) / (N * (scale - 1))))
+                wt = np.reshape(termQ2, (N, scale - 1, int(np.size(termQ2) / (N * (scale - 1)))))
                 # wtTmp = np.reshape(wtTmp, (N, scale - 1, np.size(termQ2) / (N * (scale - 1))))
                 for sr in np.arange(N):
                     # sig = mad(wt[:, :P])  # For starlet transform

@@ -58,6 +58,7 @@ def b3spline_fast(step_hole):
     c1 = 1. / 16
     c2 = 1. / 4
     c3 = 3. / 8
+    step_hole = int(step_hole)
     length = 4 * step_hole + 1
     kernel1d = np.zeros((1, length))
     kernel1d[0, 0] = c1
